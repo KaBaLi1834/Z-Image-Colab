@@ -1,5 +1,5 @@
 #@title Utils Code
-%cd /content/ComfyUI
+# %cd /content/ComfyUI
 
 import os, random, time
 
