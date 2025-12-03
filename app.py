@@ -1,12 +1,3 @@
-#@title Utils Code
-# %cd /content/ComfyUI
-
-import os, random, time
-
-import torch
-import numpy as np
-from PIL import Image
-import re, uuid
 from nodes import NODE_CLASS_MAPPINGS
 
 UNETLoader = NODE_CLASS_MAPPINGS["UNETLoader"]()
@@ -59,6 +50,7 @@ def generate(input):
     save_path=get_save_path(positive_prompt)
     Image.fromarray(np.array(decoded*255, dtype=np.uint8)[0]).save(save_path)
     return save_path,seed
+    
 import gradio as gr
 from PIL import Image
 
@@ -117,13 +109,13 @@ ASPECTS = [
 
 custom_css = ".gradio-container { font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; }"
 
-with gr.Block(theme=gr.themes.Soft(),css=custom_css) as demo:
+with gr.Blocks(theme=gr.themes.Soft(),css=custom_css) as demo:
   gr.HTML("""
-<div style="width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:20px 0;">
-    <h1 style="font-size:2.5em; margin-bottom:10px;">Z-Image-Turbo</h1>
-    <a href="https://github.com/Tongyi-MAI/Z-Image" target="_blank">
-        <img src="https://img.shields.io/badge/GitHub-Z--Image-181717?logo=github&logoColor=white"
-             style="height:28px;">
+<div style=\"width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:20px 0;\">
+    <h1 style=\"font-size:2.5em; margin-bottom:10px;\">Z-Image-Turbo</h1>
+    <a href=\"https://github.com/Tongyi-MAI/Z-Image\" target=\"_blank\">
+        <img src=\"https://img.shields.io/badge/GitHub-Z--Image-181717?logo=github&logoColor=white\"
+             style=\"height:15px;\">
     </a>
 </div>
 """)
@@ -157,5 +149,3 @@ with gr.Block(theme=gr.themes.Soft(),css=custom_css) as demo:
     )
 
 demo.launch(share=True, debug=True)
-
-
