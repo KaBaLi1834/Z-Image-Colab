@@ -1,6 +1,4 @@
 #@title Utils Code
-# %cd /content/ComfyUI
-
 import os, random, time, shutil
 
 import torch
@@ -26,19 +24,16 @@ with torch.inference_mode():
 LORA_DIR = "./models/loras"
 os.makedirs(LORA_DIR, exist_ok=True)
 
-save_dir="./results"
+save_dir = "./results"
 os.makedirs(save_dir, exist_ok=True)
 
 def get_save_path(prompt):
-  save_dir = "./results"
-  safe_prompt = re.sub(r'[^a-zA-Z0-9_-]', '_', prompt)[:25]
-  uid = uuid.uuid4().hex[:6]
-  filename = f"{safe_prompt}_{uid}.png"
-  path = os.path.join(save_dir, filename)
-  return path
+    safe_prompt = re.sub(r'[^a-zA-Z0-9_-]', '_', prompt)[:25]
+    uid = uuid.uuid4().hex[:6]
+    filename = f"{safe_prompt}_{uid}.png"
+    return os.path.join(save_dir, filename)
 
 def upload_lora(lora_file):
-    """Copy uploaded LoRA file into ComfyUI loras folder and return status + updated dropdown."""
     if lora_file is None:
         return "No file uploaded.", get_lora_choices()
     dest = os.path.join(LORA_DIR, os.path.basename(lora_file))
@@ -63,19 +58,28 @@ def generate(input):
     width = values['width']
     height = values['height']
     batch_size = values['batch_size']
-    lora_name = values.get('lora_name', 'None')
-    lora_strength = values.get('lora_strength', 1.0)
+    lora1_name = values.get('lora1_name', 'None')
+    lora1_strength = values.get('lora1_strength', 1.0)
+    lora2_name = values.get('lora2_name', 'None')
+    lora2_strength = values.get('lora2_strength', 1.0)
 
     if seed == 0:
         random.seed(int(time.time()))
         seed = random.randint(0, 18446744073709551615)
 
-    # Apply LoRA if selected
     current_unet = unet
     current_clip = clip
-    if lora_name and lora_name != "None":
+
+    # Apply LoRA 1
+    if lora1_name and lora1_name != "None":
         current_unet, current_clip = LoraLoader.load_lora(
-            current_unet, current_clip, lora_name, lora_strength, lora_strength
+            current_unet, current_clip, lora1_name, lora1_strength, lora1_strength
+        )
+
+    # Apply LoRA 2
+    if lora2_name and lora2_name != "None":
+        current_unet, current_clip = LoraLoader.load_lora(
+            current_unet, current_clip, lora2_name, lora2_strength, lora2_strength
         )
 
     positive = CLIPTextEncode.encode(current_clip, positive_prompt)[0]
@@ -97,8 +101,10 @@ def generate_ui(
     steps,
     cfg,
     denoise,
-    lora_name,
-    lora_strength,
+    lora1_name,
+    lora1_strength,
+    lora2_name,
+    lora2_strength,
     batch_size=1,
     sampler_name="euler",
     scheduler="simple"
@@ -118,8 +124,10 @@ def generate_ui(
             "sampler_name": sampler_name,
             "scheduler": scheduler,
             "denoise": float(denoise),
-            "lora_name": lora_name,
-            "lora_strength": float(lora_strength),
+            "lora1_name": lora1_name,
+            "lora1_strength": float(lora1_strength),
+            "lora2_name": lora2_name,
+            "lora2_strength": float(lora2_strength),
         }
     }
 
@@ -127,10 +135,9 @@ def generate_ui(
     return image_path, image_path, seed
 
 
-DEFAULT_POSITIVE = """A beautiful woman with platinum blond hair that is almost white, snowy white skin, red bush, very big plump red lips, high cheek bones and sharp. She has almond shaped red eyes and she's holding a intricate mask. She's wearing white and gold royal gown with a black cloak.  In the veins of her neck its gold."""
+DEFAULT_POSITIVE = """A breathtakingly beautiful woman, exotic mixed heritage, flawless golden olive skin, deep almond shaped eyes, long silky jet black hair, hyperrealistic, cinematic portrait"""
 
-DEFAULT_NEGATIVE = """low quality, blurry, unnatural skin tone, bad lighting, pixelated,
-noise, oversharpen, soft focus,pixelated"""
+DEFAULT_NEGATIVE = """low quality, blurry, unnatural skin tone, bad lighting, pixelated, noise, oversharpen, soft focus, cartoon, anime"""
 
 ASPECTS = [
     "1024x1024 (1:1)", "1152x896 (9:7)", "896x1152 (7:9)",
@@ -142,65 +149,71 @@ ASPECTS = [
 custom_css = ".gradio-container { font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; }"
 
 with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
-  gr.HTML("""
-<div style=\"width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:20px 0;\">
-    <h1 style=\"font-size:2.5em; margin-bottom:10px;\">Z-Image-Turbo</h1>
-    <a href=\"https://github.com/Tongyi-MAI/Z-Image\" target=\"_blank\">
-        <img src=\"https://img.shields.io/badge/GitHub-Z--Image-181717?logo=github&logoColor=white\"
-             style=\"height:15px;\">
+    gr.HTML("""
+<div style="width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:20px 0;">
+    <h1 style="font-size:2.5em; margin-bottom:10px;">Z-Image-Turbo</h1>
+    <a href="https://github.com/Tongyi-MAI/Z-Image" target="_blank">
+        <img src="https://img.shields.io/badge/GitHub-Z--Image-181717?logo=github&logoColor=white" style="height:15px;">
     </a>
 </div>
 """)
 
-  with gr.Row():
-    with gr.Column():
-      positive = gr.Textbox(DEFAULT_POSITIVE, label="Positive Prompt", lines=5)
+    with gr.Row():
+        with gr.Column():
+            positive = gr.Textbox(DEFAULT_POSITIVE, label="Positive Prompt", lines=5)
 
-      with gr.Row():
-        aspect = gr.Dropdown(ASPECTS, value="1024x1024 (1:1)", label="Aspect Ratio")
-        seed = gr.Number(value=0, label="Seed (0 = random)", precision=0)
-        steps = gr.Slider(4, 25, value=9, step=1, label="Steps")
+            with gr.Row():
+                aspect = gr.Dropdown(ASPECTS, value="1024x1024 (1:1)", label="Aspect Ratio")
+                seed = gr.Number(value=0, label="Seed (0 = random)", precision=0)
+                steps = gr.Slider(4, 25, value=9, step=1, label="Steps")
 
-      with gr.Row():
-        run = gr.Button('🚀 Generate', variant='primary')
+            with gr.Row():
+                run = gr.Button('🚀 Generate', variant='primary')
 
-      with gr.Accordion('Image Settings', open=False):
-        with gr.Row():
-          cfg = gr.Slider(0.5, 4.0, value=1.0, step=0.1, label="CFG")
-          denoise = gr.Slider(0.1, 1.0, value=1.0, step=0.05, label="Denoise")
-        with gr.Row():
-          negative = gr.Textbox(DEFAULT_NEGATIVE, label="Negative Prompt", lines=3)
+            with gr.Accordion('Image Settings', open=False):
+                with gr.Row():
+                    cfg = gr.Slider(0.5, 4.0, value=1.0, step=0.1, label="CFG")
+                    denoise = gr.Slider(0.1, 1.0, value=1.0, step=0.05, label="Denoise")
+                with gr.Row():
+                    negative = gr.Textbox(DEFAULT_NEGATIVE, label="Negative Prompt", lines=3)
 
-      # ── LoRA Section ──────────────────────────────────────────────
-      with gr.Accordion('🎭 Custom LoRA (Consistent Character)', open=False):
-        lora_upload = gr.File(label="Upload LoRA (.safetensors / .pt)", file_types=[".safetensors", ".pt", ".ckpt"])
-        lora_upload_btn = gr.Button("📤 Add LoRA to Library")
-        lora_upload_status = gr.Textbox(label="Upload Status", interactive=False)
-        with gr.Row():
-          lora_select = gr.Dropdown(choices=get_lora_choices(), value="None", label="Select LoRA")
-          lora_refresh = gr.Button("🔄 Refresh List", scale=0)
-        lora_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="LoRA Strength")
+            # ── LoRA 1 ──────────────────────────────────────────
+            with gr.Accordion('🎭 LoRA 1 (Character)', open=False):
+                lora1_upload = gr.File(label="Upload LoRA 1", file_types=[".safetensors", ".pt", ".ckpt"])
+                lora1_upload_btn = gr.Button("📤 Add to Library")
+                lora1_upload_status = gr.Textbox(label="Status", interactive=False)
+                with gr.Row():
+                    lora1_select = gr.Dropdown(choices=get_lora_choices(), value="None", label="Select LoRA 1")
+                    lora1_refresh = gr.Button("🔄", scale=0)
+                lora1_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="LoRA 1 Strength")
 
-        lora_upload_btn.click(
-            fn=upload_lora,
-            inputs=[lora_upload],
-            outputs=[lora_upload_status, lora_select]
-        )
-        lora_refresh.click(
-            fn=lambda: gr.Dropdown(choices=get_lora_choices()),
-            outputs=[lora_select]
-        )
-      # ──────────────────────────────────────────────────────────────
+                lora1_upload_btn.click(fn=upload_lora, inputs=[lora1_upload], outputs=[lora1_upload_status, lora1_select])
+                lora1_refresh.click(fn=lambda: gr.Dropdown(choices=get_lora_choices()), outputs=[lora1_select])
 
-    with gr.Column():
-        download_image = gr.File(label="Download Image")
-        output_img = gr.Image(label="Generated Image", height=480)
-        used_seed = gr.Textbox(label="Seed Used", interactive=False, show_copy_button=True)
+            # ── LoRA 2 ──────────────────────────────────────────
+            with gr.Accordion('✨ LoRA 2 (Style/Quality)', open=False):
+                lora2_upload = gr.File(label="Upload LoRA 2", file_types=[".safetensors", ".pt", ".ckpt"])
+                lora2_upload_btn = gr.Button("📤 Add to Library")
+                lora2_upload_status = gr.Textbox(label="Status", interactive=False)
+                with gr.Row():
+                    lora2_select = gr.Dropdown(choices=get_lora_choices(), value="None", label="Select LoRA 2")
+                    lora2_refresh = gr.Button("🔄", scale=0)
+                lora2_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="LoRA 2 Strength")
 
-  run.click(
-      fn=generate_ui,
-      inputs=[positive, negative, aspect, seed, steps, cfg, denoise, lora_select, lora_strength],
-      outputs=[download_image, output_img, used_seed]
-  )
+                lora2_upload_btn.click(fn=upload_lora, inputs=[lora2_upload], outputs=[lora2_upload_status, lora2_select])
+                lora2_refresh.click(fn=lambda: gr.Dropdown(choices=get_lora_choices()), outputs=[lora2_select])
+            # ────────────────────────────────────────────────────
+
+        with gr.Column():
+            download_image = gr.File(label="Download Image")
+            output_img = gr.Image(label="Generated Image", height=480)
+            used_seed = gr.Textbox(label="Seed Used", interactive=False, show_copy_button=True)
+
+    run.click(
+        fn=generate_ui,
+        inputs=[positive, negative, aspect, seed, steps, cfg, denoise,
+                lora1_select, lora1_strength, lora2_select, lora2_strength],
+        outputs=[download_image, output_img, used_seed]
+    )
 
 demo.launch(share=True, debug=True)
