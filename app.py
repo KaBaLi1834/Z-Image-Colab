@@ -59,28 +59,40 @@ def generate(input):
     height = values['height']
     batch_size = values['batch_size']
     lora1_name = values.get('lora1_name', 'None')
-    lora1_strength = values.get('lora1_strength', 1.0)
+    lora1_strength = values.get('lora1_strength', 0.85)
     lora2_name = values.get('lora2_name', 'None')
-    lora2_strength = values.get('lora2_strength', 1.0)
+    lora2_strength = values.get('lora2_strength', 0.65)
 
     if seed == 0:
         random.seed(int(time.time()))
         seed = random.randint(0, 18446744073709551615)
 
+    # Debug: print available LoRAs and selected ones
+    print("Available LoRAs:", os.listdir(LORA_DIR))
+    print(f"Using LoRA1: {lora1_name} (strength {lora1_strength}), LoRA2: {lora2_name} (strength {lora2_strength})")
+
     current_unet = unet
     current_clip = clip
 
-    # Apply LoRA 1
+    # Apply LoRA 1 — output becomes input for LoRA 2
     if lora1_name and lora1_name != "None":
-        current_unet, current_clip = LoraLoader.load_lora(
-            current_unet, current_clip, lora1_name, lora1_strength, lora1_strength
+        lora1_result = LoraLoader.load_lora(
+            current_unet, current_clip,
+            lora1_name,
+            lora1_strength, lora1_strength
         )
+        current_unet, current_clip = lora1_result[0], lora1_result[1]
+        print(f"✅ LoRA 1 applied: {lora1_name}")
 
-    # Apply LoRA 2
+    # Apply LoRA 2 — receives already-modified unet/clip from LoRA 1
     if lora2_name and lora2_name != "None":
-        current_unet, current_clip = LoraLoader.load_lora(
-            current_unet, current_clip, lora2_name, lora2_strength, lora2_strength
+        lora2_result = LoraLoader.load_lora(
+            current_unet, current_clip,
+            lora2_name,
+            lora2_strength, lora2_strength
         )
+        current_unet, current_clip = lora2_result[0], lora2_result[1]
+        print(f"✅ LoRA 2 applied: {lora2_name}")
 
     positive = CLIPTextEncode.encode(current_clip, positive_prompt)[0]
     negative = CLIPTextEncode.encode(current_clip, negative_prompt)[0]
@@ -185,7 +197,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
                 with gr.Row():
                     lora1_select = gr.Dropdown(choices=get_lora_choices(), value="None", label="Select LoRA 1")
                     lora1_refresh = gr.Button("🔄", scale=0)
-                lora1_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="LoRA 1 Strength")
+                lora1_strength = gr.Slider(0.0, 2.0, value=0.85, step=0.05, label="LoRA 1 Strength (Character)")
 
                 lora1_upload_btn.click(fn=upload_lora, inputs=[lora1_upload], outputs=[lora1_upload_status, lora1_select])
                 lora1_refresh.click(fn=lambda: gr.Dropdown(choices=get_lora_choices()), outputs=[lora1_select])
@@ -198,7 +210,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
                 with gr.Row():
                     lora2_select = gr.Dropdown(choices=get_lora_choices(), value="None", label="Select LoRA 2")
                     lora2_refresh = gr.Button("🔄", scale=0)
-                lora2_strength = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="LoRA 2 Strength")
+                lora2_strength = gr.Slider(0.0, 2.0, value=0.65, step=0.05, label="LoRA 2 Strength (Style)")
 
                 lora2_upload_btn.click(fn=upload_lora, inputs=[lora2_upload], outputs=[lora2_upload_status, lora2_select])
                 lora2_refresh.click(fn=lambda: gr.Dropdown(choices=get_lora_choices()), outputs=[lora2_select])
