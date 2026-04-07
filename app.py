@@ -1,5 +1,4 @@
 #@title Write new app.py with face-lock built in
-app_code = '''
 import os, random, time, shutil, re, uuid
 import torch
 import numpy as np
@@ -214,7 +213,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     )
 
 demo.launch(share=True, debug=True)
-'''
 
 with open("/kaggle/working/ComfyUI/app.py", "w") as f:
     f.write(app_code)
