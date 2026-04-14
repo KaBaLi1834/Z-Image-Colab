@@ -1,4 +1,29 @@
+import sys
+sys.path.insert(0, "/content/ComfyUI")
+sys.path.insert(0, "/content/ComfyUI/custom_nodes")
 
+# Load PuLID as a proper package
+import importlib, types
+
+package_name = "ComfyUI-PuLID-Flux"
+package_path = "/content/ComfyUI/custom_nodes/ComfyUI-PuLID-Flux"
+
+# Register as package so relative imports work
+spec = importlib.util.spec_from_file_location(
+    package_name,
+    f"{package_path}/__init__.py",
+    submodule_search_locations=[package_path]
+)
+pkg = importlib.util.module_from_spec(spec)
+pkg.__path__ = [package_path]
+pkg.__package__ = package_name
+sys.modules[package_name] = pkg
+
+# Also register submodules so relative imports resolve
+for submod in ["pulidflux", "encoders_flux", "eva_clip"]:
+    sys.modules[f"{package_name}.{submod}"] = types.ModuleType(f"{package_name}.{submod}")
+
+spec.loader.exec_module(pkg)
 #@title Utils Code
 
 import os, random, time, shutil
