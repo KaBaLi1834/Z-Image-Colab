@@ -2,15 +2,21 @@ import sys
 sys.path.insert(0, "/content/ComfyUI")
 sys.path.insert(0, "/content/ComfyUI/custom_nodes")
 
+# ── FIX: Bootstrap ComfyUI's own module registry BEFORE loading custom nodes
+# This makes folder_paths, comfy, nodes, etc. all importable
+import importlib.util, os
+
+def _bootstrap_comfyui():
+    """Import ComfyUI internals so custom nodes can find folder_paths etc."""
+    import folder_paths          # noqa – just verifying it's importable
+    import comfy.utils           # noqa
+_bootstrap_comfyui()
+
 # Load PuLID as a proper package
 import importlib, types
 
 package_name = "ComfyUI-PuLID-Flux"
 package_path = "/content/ComfyUI/custom_nodes/ComfyUI-PuLID-Flux"
-
-# ── FIX: Do NOT pre-register empty stubs for submodules.
-# Instead, register the package itself and let exec_module
-# populate real submodules via relative imports.
 
 spec = importlib.util.spec_from_file_location(
     package_name,
@@ -22,24 +28,22 @@ pkg.__path__ = [package_path]
 pkg.__package__ = package_name
 sys.modules[package_name] = pkg
 
-# ── FIX: Register each real submodule from disk BEFORE exec_module runs,
-# so relative imports like "from .pulidflux import ..." can resolve them.
 for submod in ["pulidflux", "encoders_flux", "eva_clip"]:
     submod_path = f"{package_path}/{submod}.py"
+    if not os.path.exists(submod_path):
+        continue                          # skip if file doesn't exist
     full_name = f"{package_name}.{submod}"
     sub_spec = importlib.util.spec_from_file_location(
         full_name,
         submod_path,
         submodule_search_locations=[package_path]
     )
-    if sub_spec is not None:
-        sub_mod = importlib.util.module_from_spec(sub_spec)
-        sub_mod.__package__ = package_name
-        sys.modules[full_name] = sub_mod
-        sub_spec.loader.exec_module(sub_mod)
-        setattr(pkg, submod, sub_mod)
+    sub_mod = importlib.util.module_from_spec(sub_spec)
+    sub_mod.__package__ = package_name
+    sys.modules[full_name] = sub_mod
+    sub_spec.loader.exec_module(sub_mod)
+    setattr(pkg, submod, sub_mod)
 
-# Now execute the package __init__.py — all submodules are real
 spec.loader.exec_module(pkg)
 
 #@title Utils Code
