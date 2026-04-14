@@ -8,7 +8,10 @@ import importlib, types
 package_name = "ComfyUI-PuLID-Flux"
 package_path = "/content/ComfyUI/custom_nodes/ComfyUI-PuLID-Flux"
 
-# Register as package so relative imports work
+# ── FIX: Do NOT pre-register empty stubs for submodules.
+# Instead, register the package itself and let exec_module
+# populate real submodules via relative imports.
+
 spec = importlib.util.spec_from_file_location(
     package_name,
     f"{package_path}/__init__.py",
@@ -19,11 +22,26 @@ pkg.__path__ = [package_path]
 pkg.__package__ = package_name
 sys.modules[package_name] = pkg
 
-# Also register submodules so relative imports resolve
+# ── FIX: Register each real submodule from disk BEFORE exec_module runs,
+# so relative imports like "from .pulidflux import ..." can resolve them.
 for submod in ["pulidflux", "encoders_flux", "eva_clip"]:
-    sys.modules[f"{package_name}.{submod}"] = types.ModuleType(f"{package_name}.{submod}")
+    submod_path = f"{package_path}/{submod}.py"
+    full_name = f"{package_name}.{submod}"
+    sub_spec = importlib.util.spec_from_file_location(
+        full_name,
+        submod_path,
+        submodule_search_locations=[package_path]
+    )
+    if sub_spec is not None:
+        sub_mod = importlib.util.module_from_spec(sub_spec)
+        sub_mod.__package__ = package_name
+        sys.modules[full_name] = sub_mod
+        sub_spec.loader.exec_module(sub_mod)
+        setattr(pkg, submod, sub_mod)
 
+# Now execute the package __init__.py — all submodules are real
 spec.loader.exec_module(pkg)
+
 #@title Utils Code
 
 import os, random, time, shutil, hashlib
@@ -209,7 +227,7 @@ def generate(input):
     batch_size = values['batch_size']
     lora_name = values.get('lora_name', 'None')
     lora_strength = values.get('lora_strength', 1.0)
-    face_image = values.get('face_image', None)        # PIL image or None (legacy single-image PuLID)
+    face_image = values.get('face_image', None)       # PIL image or None (legacy single-image PuLID)
     pulid_weight = values.get('pulid_weight', 0.9)
     pulid_start = values.get('pulid_start', 0.0)
     pulid_end = values.get('pulid_end', 1.0)
@@ -338,8 +356,7 @@ def generate_ui(
 
 DEFAULT_POSITIVE = """A beautiful woman with platinum blond hair that is almost white, snowy white skin, red bush, very big plump red lips, high cheek bones and sharp. She has almond shaped red eyes and she's holding a intricate mask. She's wearing white and gold royal gown with a black cloak.  In the veins of her neck its gold."""
 
-DEFAULT_NEGATIVE = """low quality, blurry, unnatural skin tone, bad lighting, pixelated,
-noise, oversharpen, soft focus, pixelated"""
+DEFAULT_NEGATIVE = """low quality, blurry, unnatural skin tone, bad lighting, pixelated, noise, oversharpen, soft focus, pixelated"""
 
 ASPECTS = [
     "1024x1024 (1:1)", "1152x896 (9:7)", "896x1152 (7:9)",
